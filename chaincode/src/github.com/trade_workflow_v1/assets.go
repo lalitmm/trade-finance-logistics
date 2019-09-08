@@ -25,7 +25,7 @@ type TradeAgreement struct {
 
 type MoneyTransfer struct {
 	Amount			int		`json:"amount"`
-	DescriptionOfTnfr	string		`json:"descriptionOfTnfr"`
+	DescriptionOfTransfer	string		`json:"descriptionOfTransfer"`
 	Status			string		`json:"status"`
 	Payment			int		`json:"payment"`
 }

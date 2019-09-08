@@ -33,7 +33,7 @@ type TradeWorkflowChaincode struct {
 }
 
 func (t *TradeWorkflowChaincode) Init(stub shim.ChaincodeStubInterface) pb.Response {
-	fmt.Println("Initializing Trade Workflow")
+	fmt.Println("Initializing Money Transfer Workflow")
 	_, args := stub.GetFunctionAndParameters()
 	var err error
 
@@ -175,15 +175,17 @@ func (t *TradeWorkflowChaincode) Invoke(stub shim.ChaincodeStubInterface) pb.Res
 	/*} else if function == "delete" {
 		// Deletes an entity from its state
 		return t.delete(stub, creatorOrg, creatorCertIssuer, args)*/
-	}
-
+	} else if function == "moneyTransfer" {
+		// Sender requests a money transfer
+		return t.requestMoneyTransfer(stub, creatorOrg, creatorCertIssuer, args)
+        }
 	return shim.Error("Invalid invoke function name")
 }
 
 // Request a money transfer
 func (t *TradeWorkflowChaincode) requestMoneyTransfer(stub shim.ChaincodeStubInterface, creatorOrg string, creatorCertIssuer string, args []string) pb.Response {
 	var tradeKey string
-	var tradeAgreement *TradeAgreement
+	var tradeAgreement *MoneyTransfer
 	var tradeAgreementBytes []byte
 	var amount int
 	var err error
@@ -207,7 +209,7 @@ func (t *TradeWorkflowChaincode) requestMoneyTransfer(stub shim.ChaincodeStubInt
 
 	// ADD TRADE LIMIT CHECK HERE 
 	
-	tradeAgreement = &TradeAgreement{amount, args[2], REQUESTED, 0}
+	tradeAgreement = &MoneyTransfer{amount, args[2], REQUESTED, 0}
 	tradeAgreementBytes, err = json.Marshal(tradeAgreement)
 	if err != nil {
 		return shim.Error("Error marshaling money transfer structure")
@@ -230,7 +232,7 @@ func (t *TradeWorkflowChaincode) requestMoneyTransfer(stub shim.ChaincodeStubInt
 // Accept a money transfer
 func (t *TradeWorkflowChaincode) acceptMoneyTransfer(stub shim.ChaincodeStubInterface, creatorOrg string, creatorCertIssuer string, args []string) pb.Response {
 	var tradeKey string
-	var tradeAgreement *TradeAgreement
+	var tradeAgreement *MoneyTransfer
 	var tradeAgreementBytes []byte
 	var err error
 
