@@ -23,6 +23,13 @@ type TradeAgreement struct {
 	Payment			int		`json:"payment"`
 }
 
+type MoneyTransfer struct {
+	Amount			int		`json:"amount"`
+	DescriptionOfTnfr	string		`json:"descriptionOfTnfr"`
+	Status			string		`json:"status"`
+	Payment			int		`json:"payment"`
+}
+
 type LetterOfCredit struct {
 	Id			string		`json:"id"`
 	ExpirationDate		string		`json:"expirationDate"`

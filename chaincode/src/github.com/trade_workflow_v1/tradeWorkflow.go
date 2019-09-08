@@ -69,14 +69,24 @@ func (t *TradeWorkflowChaincode) Init(stub shim.ChaincodeStubInterface) pb.Respo
 		return shim.Error(err.Error())
 	}
 
-	fmt.Printf("Exporter: %s\n", args[0])
-	fmt.Printf("Exporter's Bank: %s\n", args[1])
-	fmt.Printf("Exporter's Account Balance: %s\n", args[2])
-	fmt.Printf("Importer: %s\n", args[3])
-	fmt.Printf("Importer's Bank: %s\n", args[4])
-	fmt.Printf("Importer's Account Balance: %s\n", args[5])
+	// fmt.Printf("Exporter: %s\n", args[0])
+	// fmt.Printf("Exporter's Bank: %s\n", args[1])
+	// fmt.Printf("Exporter's Account Balance: %s\n", args[2])
+	// fmt.Printf("Importer: %s\n", args[3])
+	// fmt.Printf("Importer's Bank: %s\n", args[4])
+	// fmt.Printf("Importer's Account Balance: %s\n", args[5])
+	// fmt.Printf("Carrier: %s\n", args[6])
+	// fmt.Printf("Regulatory Authority: %s\n", args[7])
+
+	fmt.Printf("Sender: %s\n", args[0])
+	fmt.Printf("Sender's Bank: %s\n", args[1])
+	fmt.Printf("Sender's Account Balance: %s\n", args[2])
+	fmt.Printf("Receiver: %s\n", args[3])
+	fmt.Printf("Receiver's Bank: %s\n", args[4])
+	fmt.Printf("Receiver's Account Balance: %s\n", args[5])
 	fmt.Printf("Carrier: %s\n", args[6])
 	fmt.Printf("Regulatory Authority: %s\n", args[7])
+
 
 	// Map participant identities to their roles on the ledger
 	roleKeys := []string{ expKey, ebKey, expBalKey, impKey, ibKey, impBalKey, carKey, raKey }
@@ -95,7 +105,8 @@ func (t *TradeWorkflowChaincode) Invoke(stub shim.ChaincodeStubInterface) pb.Res
 	var creatorOrg, creatorCertIssuer string
 	var err error
 
-	fmt.Println("TradeWorkflow Invoke")
+	//fmt.Println("TradeWorkflow Invoke")
+	fmt.Println("International Money Transfer Workflow Invoke")
 
 	if !t.testMode {
 		creatorOrg, creatorCertIssuer, err = getTxCreatorInfo(stub)
@@ -167,6 +178,110 @@ func (t *TradeWorkflowChaincode) Invoke(stub shim.ChaincodeStubInterface) pb.Res
 	}
 
 	return shim.Error("Invalid invoke function name")
+}
+
+// Request a money transfer
+func (t *TradeWorkflowChaincode) requestMoneyTransfer(stub shim.ChaincodeStubInterface, creatorOrg string, creatorCertIssuer string, args []string) pb.Response {
+	var tradeKey string
+	var tradeAgreement *TradeAgreement
+	var tradeAgreementBytes []byte
+	var amount int
+	var err error
+
+	// ADD TRADELIMIT RETRIEVAL HERE
+
+	// Access control: Only an Importer Org member can invoke this transaction
+	if !t.testMode && !authenticateImporterOrg(creatorOrg, creatorCertIssuer) {
+		return shim.Error("Caller not a member of Importer Org. Access denied.")
+	}
+
+	if len(args) != 3 {
+		err = errors.New(fmt.Sprintf("Incorrect number of arguments. Expecting 3: {ID, Amount, Description of Transfer}. Found %d", len(args)))
+		return shim.Error(err.Error())
+	}
+
+	amount, err = strconv.Atoi(string(args[1]))
+	if err != nil {
+		return shim.Error(err.Error())
+	}
+
+	// ADD TRADE LIMIT CHECK HERE 
+	
+	tradeAgreement = &TradeAgreement{amount, args[2], REQUESTED, 0}
+	tradeAgreementBytes, err = json.Marshal(tradeAgreement)
+	if err != nil {
+		return shim.Error("Error marshaling money transfer structure")
+	}
+
+	// Write the state to the ledger
+	tradeKey, err = getTradeKey(stub, args[0])
+	if err != nil {
+		return shim.Error(err.Error())
+	}
+	err = stub.PutState(tradeKey, tradeAgreementBytes)
+	if err != nil {
+		return shim.Error(err.Error())
+	}
+	fmt.Printf("Transfer %s request recorded\n", args[0])
+
+	return shim.Success(nil)
+}
+
+// Accept a money transfer
+func (t *TradeWorkflowChaincode) acceptMoneyTransfer(stub shim.ChaincodeStubInterface, creatorOrg string, creatorCertIssuer string, args []string) pb.Response {
+	var tradeKey string
+	var tradeAgreement *TradeAgreement
+	var tradeAgreementBytes []byte
+	var err error
+
+	// Access control: Only a Sender Entity Org member can invoke this transaction
+	if !t.testMode && !authenticateExportingEntityOrg(creatorOrg, creatorCertIssuer) {
+		return shim.Error("Caller not a member of Sender Entity Org. Access denied.")
+	}
+
+	if len(args) != 1 {
+		err = errors.New(fmt.Sprintf("Incorrect number of arguments. Expecting 1: {ID}. Found %d", len(args)))
+		return shim.Error(err.Error())
+	}
+
+	// Get the state from the ledger
+	tradeKey, err = getTradeKey(stub, args[0])
+	if err != nil {
+		return shim.Error(err.Error())
+	}
+	tradeAgreementBytes, err = stub.GetState(tradeKey)
+	if err != nil {
+		return shim.Error(err.Error())
+	}
+
+	if len(tradeAgreementBytes) == 0 {
+		err = errors.New(fmt.Sprintf("No record found for transfer ID %s", args[0]))
+		return shim.Error(err.Error())
+	}
+
+	// Unmarshal the JSON
+	err = json.Unmarshal(tradeAgreementBytes, &tradeAgreement)
+	if err != nil {
+		return shim.Error(err.Error())
+	}
+
+	if tradeAgreement.Status == ACCEPTED {
+		fmt.Printf("Transfer %s already accepted", args[0])
+	} else {
+		tradeAgreement.Status = ACCEPTED
+		tradeAgreementBytes, err = json.Marshal(tradeAgreement)
+		if err != nil {
+			return shim.Error("Error marshaling trade agreement structure")
+		}
+		// Write the state to the ledger
+		err = stub.PutState(tradeKey, tradeAgreementBytes)
+		if err != nil {
+			return shim.Error(err.Error())
+		}
+	}
+	fmt.Printf("Transfer %s acceptance recorded\n", args[0])
+
+	return shim.Success(nil)
 }
 
 // Request a trade agreement
